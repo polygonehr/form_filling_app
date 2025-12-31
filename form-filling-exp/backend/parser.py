@@ -51,12 +51,13 @@ def is_simple_text(filename: str) -> bool:
     return ext in SIMPLE_TEXT_EXTENSIONS
 
 
-def get_parser(mode: ParseMode = "cost_effective") -> "LlamaParse":
+def get_parser(mode: ParseMode = "cost_effective", api_key: str | None = None) -> "LlamaParse":
     """
     Get a LlamaParse instance with the specified mode.
 
     Args:
         mode: "cost_effective" or "agentic_plus"
+        api_key: LlamaCloud API key (if not provided, uses LLAMA_CLOUD_API_KEY env var)
 
     Returns:
         LlamaParse instance configured for the mode
@@ -74,13 +75,18 @@ def get_parser(mode: ParseMode = "cost_effective") -> "LlamaParse":
         "precise_bounding_box": True,
     }
 
+    # Add API key if provided (otherwise LlamaParse uses env var)
+    if api_key:
+        common_args["api_key"] = api_key
+
     return LlamaParse(**common_args)
 
 
 async def parse_file(
     file_bytes: bytes,
     filename: str,
-    mode: ParseMode = "cost_effective"
+    mode: ParseMode = "cost_effective",
+    api_key: str | None = None,
 ) -> str:
     """
     Parse a file and return its markdown content.
@@ -89,6 +95,7 @@ async def parse_file(
         file_bytes: The file content as bytes
         filename: The original filename (needed for LlamaParse)
         mode: The parsing mode to use
+        api_key: LlamaCloud API key (if not provided, uses env var)
 
     Returns:
         Markdown string of the parsed content
@@ -112,7 +119,7 @@ async def parse_file(
     if not LLAMAPARSE_AVAILABLE:
         raise RuntimeError(f"LlamaParse not available: {LLAMAPARSE_ERROR}")
 
-    parser = get_parser(mode)
+    parser = get_parser(mode, api_key=api_key)
 
     # Write bytes to temp file (LlamaParse API takes file paths)
     with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
@@ -141,7 +148,8 @@ async def parse_file(
 
 async def parse_files_stream(
     files: list[tuple[bytes, str]],
-    mode: ParseMode = "cost_effective"
+    mode: ParseMode = "cost_effective",
+    api_key: str | None = None,
 ) -> AsyncGenerator[dict, None]:
     """
     Parse multiple files with streaming status updates.
@@ -149,6 +157,7 @@ async def parse_files_stream(
     Args:
         files: List of (file_bytes, filename) tuples
         mode: The parsing mode to use
+        api_key: LlamaCloud API key (if not provided, uses env var)
 
     Yields:
         Status updates and results as dicts
@@ -198,7 +207,7 @@ async def parse_files_stream(
                     "status": "llamaparse"
                 }
 
-                content = await parse_file(file_bytes, filename, mode)
+                content = await parse_file(file_bytes, filename, mode, api_key=api_key)
                 results.append({
                     "filename": filename,
                     "content": content,

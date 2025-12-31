@@ -14,11 +14,15 @@ import {
 } from '@/lib/session';
 import LeftPanel from '@/components/LeftPanel';
 import ChatPanel from '@/components/ChatPanel';
+import ApiKeyGate, { clearStoredApiKey } from '@/components/ApiKeyGate';
 
 // Helper to generate unique IDs
 const generateId = () => Math.random().toString(36).substring(2, 11);
 
 export default function Home() {
+  // LlamaCloud API key (required to use the app)
+  const [llamaApiKey, setLlamaApiKey] = useState<string | null>(null);
+
   const [sessionId, setSessionId] = useState<string>('');
   const [file, setFile] = useState<File | null>(null);
   const [fields, setFields] = useState<FormField[]>([]);
@@ -190,7 +194,7 @@ export default function Home() {
       try {
         const results: ContextFile[] = [];
 
-        for await (const event of streamParseFiles(files, parseMode, currentUserSessionId)) {
+        for await (const event of streamParseFiles(files, parseMode, llamaApiKey!, currentUserSessionId)) {
           if (event.type === 'progress' && event.current !== undefined && event.total !== undefined && event.filename && event.status) {
             setParseProgress({
               current: event.current,
@@ -227,7 +231,7 @@ export default function Home() {
         setParseProgress(null);
       }
     },
-    [userSessionId]
+    [userSessionId, llamaApiKey]
   );
 
   // Handle sending a chat message
@@ -411,6 +415,7 @@ export default function Home() {
   );
 
   return (
+    <ApiKeyGate onApiKeyValidated={setLlamaApiKey}>
     <div className="h-screen flex flex-col bg-background">
       {/* Header */}
       <header className="flex-shrink-0 px-6 py-3 border-b border-border flex items-center justify-between">
@@ -439,6 +444,17 @@ export default function Home() {
           >
             API Docs
           </a>
+          <button
+            onClick={() => {
+              clearStoredApiKey();
+              setLlamaApiKey(null);
+              window.location.reload();
+            }}
+            className="text-xs text-foreground-muted hover:text-error transition-colors"
+            title="Sign out and clear API key"
+          >
+            Sign Out
+          </button>
         </div>
       </header>
 
@@ -476,6 +492,7 @@ export default function Home() {
         </div>
       </main>
     </div>
+    </ApiKeyGate>
   );
 }
 

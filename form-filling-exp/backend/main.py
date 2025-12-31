@@ -614,6 +614,7 @@ async def parse_context_files(
     files: list[UploadFile] = File(...),
     parse_mode: str = Form("cost_effective"),
     user_session_id: Optional[str] = Form(None),
+    api_key: str = Form(...),
 ):
     """
     Parse uploaded context files using LlamaParse (for complex files) or direct read (for simple text).
@@ -624,10 +625,19 @@ async def parse_context_files(
         files: Up to 5 files to parse
         parse_mode: "cost_effective" or "agentic_plus"
         user_session_id: Optional session ID to associate parsed files with
+        api_key: LlamaCloud API key (required)
 
     Returns:
         SSE stream with progress updates and final results
     """
+    # Validate API key
+    if not api_key or not api_key.strip():
+        raise HTTPException(status_code=400, detail="API key is required")
+
+    api_key = api_key.strip()
+    if not api_key.startswith("llx-"):
+        raise HTTPException(status_code=400, detail="Invalid API key format")
+
     # Validate file count
     if len(files) > 5:
         raise HTTPException(status_code=400, detail="Maximum 5 files allowed")
@@ -657,7 +667,7 @@ async def parse_context_files(
         yield f"data: {json.dumps({'type': 'init', 'message': f'Starting to parse {len(file_data)} file(s)...'})}\n\n"
 
         try:
-            async for event in parse_files_stream(file_data, parse_mode):
+            async for event in parse_files_stream(file_data, parse_mode, api_key=api_key):
                 yield f"data: {json.dumps(event)}\n\n"
 
                 # If this is the complete event, also store in session if session_id provided
@@ -699,6 +709,68 @@ async def get_parse_status():
         "llamaparse_available": LLAMAPARSE_AVAILABLE,
         "llamaparse_error": LLAMAPARSE_ERROR if not LLAMAPARSE_AVAILABLE else None,
     }
+
+
+@app.post("/validate-api-key")
+async def validate_api_key(api_key: str = Form(...)):
+    """
+    Validate a LlamaCloud API key by making a test request.
+
+    This endpoint is used to gate access to the application.
+    Users must provide a valid LlamaCloud API key before using the app.
+    """
+    if not api_key or not api_key.strip():
+        raise HTTPException(status_code=400, detail="API key is required")
+
+    api_key = api_key.strip()
+
+    # Validate key format (LlamaCloud keys start with "llx-")
+    if not api_key.startswith("llx-"):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid API key format. LlamaCloud API keys start with 'llx-'"
+        )
+
+    # Test the key by making a request to LlamaCloud API
+    try:
+        import httpx
+
+        # Use the LlamaCloud API list projects endpoint to validate the key
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                "https://api.cloud.llamaindex.ai/api/v1/projects",
+                headers={"Authorization": f"Bearer {api_key}"},
+                timeout=10.0,
+            )
+
+            if response.status_code == 401:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Invalid API key. Please check your LlamaCloud API key."
+                )
+            elif response.status_code == 403:
+                raise HTTPException(
+                    status_code=403,
+                    detail="API key does not have permission. Please check your LlamaCloud account."
+                )
+            elif response.status_code >= 400:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Failed to validate API key: {response.text}"
+                )
+
+            return {"valid": True, "message": "API key is valid"}
+
+    except httpx.TimeoutException:
+        raise HTTPException(
+            status_code=504,
+            detail="Timeout while validating API key. Please try again."
+        )
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to connect to LlamaCloud: {str(e)}"
+        )
 
 
 # ============================================================================
