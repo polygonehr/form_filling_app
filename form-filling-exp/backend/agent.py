@@ -503,7 +503,7 @@ if AGENT_SDK_AVAILABLE:
                 "field_id": f.field_id,
                 "type": f.field_type.value,
                 "page": f.page,
-                "label_context": f.label_context[:100],
+                "label": f.friendly_label or f.label_context[:100],
                 "has_options": f.options is not None,
             }
             # Include current value if the field has been filled
@@ -526,13 +526,15 @@ if AGENT_SDK_AVAILABLE:
         results = []
 
         for f in session.fields:
+            # Search in both friendly_label and label_context
+            friendly_lower = (f.friendly_label or "").lower()
             context_lower = f.label_context.lower()
-            if query in context_lower or any(word in context_lower for word in query.split()):
+            if query in friendly_lower or query in context_lower or any(word in friendly_lower or word in context_lower for word in query.split()):
                 field_info = {
                     "field_id": f.field_id,
                     "type": f.field_type.value,
                     "page": f.page,
-                    "label_context": f.label_context[:150],
+                    "label": f.friendly_label or f.label_context[:150],
                     "options": f.options,
                 }
                 # Include current value if set
@@ -559,7 +561,7 @@ if AGENT_SDK_AVAILABLE:
             "field_id": field.field_id,
             "type": field.field_type.value,
             "page": field.page,
-            "label_context": field.label_context,
+            "label": field.friendly_label or field.label_context,
             "options": field.options,
             "pending_value": session.pending_edits.get(field_id),
             "current_value": session.applied_edits.get(field_id) or field.current_value,
@@ -611,7 +613,7 @@ if AGENT_SDK_AVAILABLE:
             edits.append({
                 "field_id": field_id,
                 "value": value,
-                "label_context": field.label_context[:80] if field else "unknown",
+                "label": (field.friendly_label or field.label_context[:80]) if field else "unknown",
                 "type": field.field_type.value if field else "unknown",
             })
 
@@ -962,11 +964,15 @@ def _get_field_label(field_id: str) -> str:
     if not field:
         return None
 
-    # Use the native field name if available (cleanest option)
+    # Use the LLM-generated friendly label first (cleanest option)
+    if field.friendly_label:
+        return field.friendly_label
+
+    # Fallback: format the native field name
     if field.native_field_name:
         return _format_field_name(field.native_field_name)
 
-    # Fallback: extract from field_id (format: page0_fieldname)
+    # Last resort: extract from field_id (format: page0_fieldname)
     if "_" in field_id:
         raw_name = field_id.split("_", 1)[1]
         return _format_field_name(raw_name)
