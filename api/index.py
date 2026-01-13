@@ -14,3 +14,6 @@ app = application
 # This is needed for Vercel's serverless environment
 if __name__ == "__main__":
     app.run(debug=True, port=5001)
+else:
+    # This makes it work with Vercel's serverless environment
+    pass
