@@ -1,12 +1,18 @@
-from flask import Flask, render_template, request, jsonify
 import os
 import sys
+from flask import Flask, render_template, request, jsonify
 
-# Add the parent directory to the path so we can import app.py
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add both web/ and root directory to Python path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'web'))
+sys.path.insert(0, os.path.dirname(__file__))
 
-# Import the main application
-from app import app as application
+# Now import your Flask app
+try:
+    # Adjust this based on your actual file structure
+    from app import app as application  # If your main file is web/app.py
+except ImportError:
+    # Try alternative import paths
+    from web.app import app as application
 
 # Vercel requires this specific variable name
 app = application
