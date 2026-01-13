@@ -9,5 +9,17 @@
       "source": "/(.*)",
       "destination": "/api/index.py"
     }
-  ]
+  ],
+  "builds": [
+    {
+      "src": "api/*.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "build": {
+    "env": {
+      "PYTHONPATH": "/var/task/web:/var/task",
+      "PIP_CUSTOM_PATH": "web/requirements.txt"
+    }
+  }
 }
